@@ -29,12 +29,14 @@ import os
 import re
 import socket
 import time
+import datetime
 import urllib2
 import base64
 import csv
 import sys
 import math
 import random
+import json
 
 import boto
 import boto.ec2
@@ -364,6 +366,22 @@ def _summarize_results(results, params, csv_filename):
     return summarized_results
 
 
+def extract_results(summarized_results):
+    result = dict()
+    result['request_count'] = summarized_results['total_complete_requests']
+    result['request_failed_connect_count'] = summarized_results['total_failed_requests_connect']
+    result['request_failed_receive_count'] = summarized_results['total_failed_requests_receive']
+    result['request_failed_exception_count'] = summarized_results['total_failed_requests_exceptions']
+    result['reqs_per_second'] = summarized_results['mean_requests']
+    result['req_avg_response_ms'] = summarized_results['mean_response']
+    result['req_50th_percentile_response_ms'] = summarized_results['request_time_cdf'][49]
+    result['req_90th_percentile_response_ms'] = summarized_results['request_time_cdf'][89]
+    result['execution_time'] = summarized_results['execution_time']
+    result['start_time'] = summarized_results['start_time']
+    result['end_time'] = summarized_results['end_time']
+
+    return result
+
 def _create_request_time_cdf_csv(results, complete_bees_params, request_time_cdf, csv_filename):
     if csv_filename:
         with open(csv_filename, 'w') as stream:
@@ -458,6 +476,7 @@ def attack(url, n, c, **options):
     post_file = options.get('post_file', '')
     keep_alive = options.get('keep_alive', False)
     basic_auth = options.get('basic_auth', '')
+    log_file = options.get('log_file', None)
 
     if csv_filename:
         try:
@@ -552,14 +571,41 @@ def attack(url, n, c, **options):
     response = urllib2.urlopen(request)
     response.read()
 
-    print 'Organizing the swarm.'
+    run_times = dict()
+    start_time = datetime.datetime.now()
+
+    print 'Organizing the swarm. Attack started at: %s' % start_time
     # Spin up processes for connecting to EC2 instances
     pool = Pool(len(params))
     results = pool.map(_attack, params)
 
+    end_time = datetime.datetime.now()
+    
+
+
     summarized_results = _summarize_results(results, params, csv_filename)
+    summarized_results['start_time'] = str(start_time)
+    summarized_results['end_time'] = str(end_time)
+    summarized_results['execution_time'] = str(end_time - start_time)
+
+    json_report = extract_results(summarized_results)
+    json_report['url'] = url
+    json_report['bees_count'] = instance_count
+
     print 'Offensive complete.'
+    print 'Execution time was %s' % str(summarized_results['execution_time'])
+
     _print_results(summarized_results)
+    json_string = json.dumps(json_report, indent=4, sort_keys=True) 
+    if log_file == None:
+        print 'json results:\n%s' % json_string
+    else:
+        try:
+            with open(log_file, "a") as myfile:
+                myfile.write(json_string)
+        except:
+            print 'error: cant write json results to log file: %s' % log_file
+            print json_string
 
     print 'The swarm is awaiting new orders.'
 

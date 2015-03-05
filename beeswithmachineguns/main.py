@@ -118,6 +118,8 @@ commands:
                             help='The lower bounds for request per second. If this option is passed and the target is above the value a 1 will be returned with the report details (default: None).')
     attack_group.add_option('-A', '--basic_auth', metavar='basic_auth', nargs=1, action='store', dest='basic_auth', default='', type='string',
                             help='BASIC authentication credentials, format auth-username:password (default: None).')
+    attack_group.add_option('-L', '--log-file', metavar='FILENAME', nargs=1, action='store', dest='log_file', default='', type='string',
+                            help='path to log file, will log results in json format')
 
     parser.add_option_group(attack_group)
 
@@ -156,7 +158,8 @@ commands:
             csv_filename=options.csv_filename,
             tpr=options.tpr,
             rps=options.rps,
-            basic_auth=options.basic_auth
+            basic_auth=options.basic_auth,
+            log_file=options.log_file
         )
 
         bees.attack(options.url, options.number, options.concurrent, **additional_options)
